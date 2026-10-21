@@ -1,4 +1,4 @@
-const CACHE = "app-v4"; // cambia el número al publicar una versión nueva
+const CACHE = "app-v5"; // cambia el número al publicar una versión nueva
 const BASE = ["./", "./index.html", "./app.js", "./i18n.js", "./core.js", "./config.js", "./manifest.webmanifest",
               "./icons/icon-192.png", "./icons/icon-512.png"];
 self.addEventListener("install", e => {

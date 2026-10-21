@@ -221,9 +221,11 @@ function cargarDeudas(){
         cont.innerHTML = '<p class="vacio">' + t("No hay deudas registradas.") + '</p>';
         return;
     }
+    const fechaTxt = f => new Date(f + "T12:00:00").toLocaleDateString(window.LOCALE || "es");
     cont.innerHTML = deudas.map(d => {
         const pagado = Math.max(0, d.inicial - d.saldo);
         const pct = d.inicial > 0 ? Math.min(100, Math.round(pagado / d.inicial * 100)) : 0;
+        const abonos = d.abonos || [];
         return `
         <div class="item">
             <h3>${esc(d.nombre)}</h3>
@@ -232,13 +234,98 @@ function cargarDeudas(){
                 <div class="progress-bar" style="width:${pct}%"></div>
             </div>
             <p>${t("{p}% pagado", {p: pct})}</p>
-            <br>
+            ${d.saldo > 0 ? `
+            <div class="abono">
+                <input type="number" id="abono_${d.id}" min="0" step="0.01" placeholder="${t('Abono')}" aria-label="${t('Abono')}"
+                    onkeydown="if(event.key==='Enter') abonarDeuda('${d.id}')">
+                <button onclick="abonarDeuda('${d.id}')">${t("Registrar abono")}</button>
+            </div>` : `<p class="pagada">${t("✅ Pagada")}</p>`}
+            ${abonos.length ? `
+            <details>
+                <summary>${t("Historial de abonos ({n})", {n: abonos.length})}</summary>
+                ${abonos.slice().reverse().map(a => `
+                <div class="hist">
+                    <span>${fechaTxt(a.fecha)} · ${dinero(a.monto)}</span>
+                    <button class="sec" onclick="deshacerAbono('${d.id}','${a.id}')">${t("Deshacer")}</button>
+                </div>`).join("")}
+            </details>` : ""}
             <div class="acciones" style="display:flex;gap:8px;flex-wrap:wrap">
                 <button onclick="editarDeuda('${d.id}')">${t("Editar")}</button>
                 <button class="danger" onclick="eliminarDeuda('${d.id}')">${t("Eliminar")}</button>
             </div>
         </div>`;
     }).join("");
+}
+
+function abonarDeuda(id){
+    const d = deudas.find(x => x.id === id);
+    if(!d) return;
+    const m = num($("abono_" + id).value);
+    if(m <= 0){ alert(t("Escribe un abono mayor a 0.")); return; }
+    if(m > d.saldo){ alert(t("El abono no puede ser mayor al saldo pendiente.")); return; }
+    d.saldo = Math.round((d.saldo - m) * 100) / 100;
+    (d.abonos = d.abonos || []).push({id: nuevoId(), fecha: new Date().toISOString().slice(0,10), monto: m});
+    guardar();
+    cargarDeudas();
+    actualizarDashboard();
+}
+
+function deshacerAbono(did, aid){
+    const d = deudas.find(x => x.id === did);
+    const a = d && (d.abonos || []).find(x => x.id === aid);
+    if(!a) return;
+    if(!confirm(t("¿Deshacer este abono?"))) return;
+    d.abonos = d.abonos.filter(x => x.id !== aid);
+    d.saldo = Math.min(d.inicial, Math.round((d.saldo + a.monto) * 100) / 100);
+    guardar();
+    cargarDeudas();
+    actualizarDashboard();
+}
+
+/* ===== Mostrar / ocultar listados ===== */
+function aplicarVista(){
+    ["tabla", "deudas"].forEach(k => {
+        const oculto = localStorage.getItem("oculto_" + k) === "1";
+        $("wrap_" + k).classList.toggle("hidden", oculto);
+        $("btnVer_" + k).textContent = oculto ? t("👁 Mostrar listado") : t("🙈 Ocultar listado");
+    });
+}
+function alternarLista(k){
+    localStorage.setItem("oculto_" + k, localStorage.getItem("oculto_" + k) === "1" ? "0" : "1");
+    aplicarVista();
+}
+
+/* ===== Respaldo (exportar / importar JSON) ===== */
+function exportarRespaldo(){
+    const o = {app: "control-personal", version: 1, exportado: new Date().toISOString(), categorias, datos, deudas};
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(o, null, 2)], {type: "application/json"}));
+    a.download = "respaldo-gastos-" + new Date().toISOString().slice(0,10) + ".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function validarRespaldo(o){
+    if(!o || typeof o !== "object") return false;
+    if(!Array.isArray(o.categorias) || !Array.isArray(o.deudas)) return false;
+    if(!o.datos || typeof o.datos !== "object" || Array.isArray(o.datos)) return false;
+    if(!o.categorias.every(c => c && typeof c.id === "string" && typeof c.nombre === "string" && (c.tipo === "fija" || c.tipo === "variable"))) return false;
+    return o.deudas.every(d => d && typeof d.id === "string" && typeof d.nombre === "string" && isFinite(d.inicial) && isFinite(d.saldo));
+}
+function importarRespaldo(file){
+    const r = new FileReader();
+    r.onload = () => {
+        let o = null;
+        try{ o = JSON.parse(r.result); }catch(e){}
+        if(!validarRespaldo(o)){ alert(t("El archivo no es un respaldo válido.")); return; }
+        if(!confirm(t("Esto reemplazará todos tus datos actuales por los del respaldo. ¿Continuar?"))) return;
+        categorias = o.categorias; datos = o.datos; deudas = o.deudas;
+        guardar();
+        cargarCategorias();
+        cargarDeudas();
+        cargarMes();
+        alert(t("Respaldo importado correctamente."));
+    };
+    r.readAsText(file);
 }
 
 /* ===== Tabla, alertas y dashboard ===== */
@@ -368,8 +455,14 @@ window.iniciarApp = function(uid){
         $("ingreso").addEventListener("input", guardarInfoMes);
         $("presupuesto").addEventListener("input", guardarInfoMes);
         $("montoCategoriaCaptura").addEventListener("keydown", e => { if(e.key === "Enter") categoriaSiguiente(); });
+        $("fileImport").addEventListener("change", e => {
+            const f = e.target.files[0];
+            if(f) importarRespaldo(f);
+            e.target.value = "";
+        });
         listo = true;
     }
+    aplicarVista();
     if(!$("mes").value) $("mes").value = localStorage.getItem("mesSeleccionado") || new Date().toISOString().slice(0,7);
     cargarCategorias();
     cargarDeudas();

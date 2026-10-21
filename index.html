@@ -60,6 +60,12 @@ tr.total td{font-weight:700;background:#0f172a;}
 .userbar span{word-break:break-all}
 .acciones{display:flex;gap:8px;flex-wrap:wrap}
 .msg{margin:10px 0;color:#fbbf24;font-size:14px}
+.abono{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.abono input{max-width:180px}
+details{margin:8px 0}
+summary{cursor:pointer;color:var(--primary)}
+.hist{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px}
+.pagada{color:var(--ok);font-weight:700;margin:8px 0}
 
 </style>
 </head>
@@ -126,12 +132,15 @@ tr.total td{font-weight:700;background:#0f172a;}
     <h2>Gastos del Mes</h2>
     <button onclick="abrirCapturaRapida()">📝 Actualizar Gastos del Mes</button>
     <br><br>
+    <button class="sec" id="btnVer_tabla" onclick="alternarLista('tabla')">🙈 Ocultar listado</button>
+    <div id="wrap_tabla" style="margin-top:10px">
     <table>
         <thead>
             <tr><th>Categoría</th><th>Tipo</th><th class="num">Monto</th></tr>
         </thead>
         <tbody id="tablaGastos"></tbody>
     </table>
+    </div>
     <div id="alertas"></div>
 </div>
 
@@ -144,7 +153,18 @@ tr.total td{font-weight:700;background:#0f172a;}
         <button onclick="agregarDeuda()">Agregar Deuda</button>
     </div>
     <br>
-    <div id="listaDeudas"></div>
+    <button class="sec" id="btnVer_deudas" onclick="alternarLista('deudas')">🙈 Ocultar listado</button>
+    <div id="wrap_deudas" style="margin-top:10px"><div id="listaDeudas"></div></div>
+</div>
+
+<div class="card">
+    <h2>💾 Respaldo</h2>
+    <p class="vacio">Guarda una copia de tus datos en un archivo o restáurala desde uno.</p>
+    <div class="acciones">
+        <button onclick="exportarRespaldo()">⬇ Exportar respaldo</button>
+        <button class="sec" onclick="document.getElementById('fileImport').click()">⬆ Importar respaldo</button>
+        <input type="file" id="fileImport" accept="application/json,.json" class="hidden">
+    </div>
 </div>
 </div>
 </div>
